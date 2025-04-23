@@ -72,4 +72,32 @@ router.get(
   }
 );
 
+
+// Update user info
+router.put(
+  "/me",
+  authMiddleware,
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { name, email, profileImage } = req.body;
+      
+      const user = await User.findByIdAndUpdate(
+        (req as any).userId,
+        { name, email, profileImage },
+        { new: true }
+      ).select("-password");
+
+      if (!user) {
+        res.status(404).json({ message: "User not found" });
+        return;
+      }
+
+      res.json(user);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Server error" });
+    }
+  }
+);
+
 export default router;
