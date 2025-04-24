@@ -146,7 +146,7 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
   }
 });
 
-router.get("/:id", async (req: Request, res: Response): Promise<void> => {
+router.get("/:id", auth, async (req: any, res: Response): Promise<void> => {
   try {
     const book = await Book.findById(req.params.id).lean();
     if (!book) {
@@ -154,11 +154,32 @@ router.get("/:id", async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    res.json(book);
+    if (!book.isAvailable) {
+      const loan = await Loan.findOne({
+        book: book._id,
+        status: "active",
+      }).lean();
+
+      if (loan) {
+        res.json({
+          ...book,
+          borrowedDate: loan.borrowedDate.toISOString(),
+          dueDate: loan.dueDate.toISOString(),
+          borrower: loan.user.toString(),
+          loanId: loan._id.toString(),
+        });
+        return; // 🔐 prevent sending another response later
+      }
+    }
+
+    res.json(book); // sent only if loan isn't found or book is available
   } catch (error) {
+    console.error(error);
     res.status(500).send("Server error");
   }
 });
+
+
 
 router.post("/", auth, async (req: Request, res: Response): Promise<void> => {
   try {
