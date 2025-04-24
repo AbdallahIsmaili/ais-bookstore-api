@@ -58,7 +58,6 @@ router.get(
   authMiddleware,
   async (req: Request, res: Response): Promise<void> => {
     try {
-      // TypeScript fix: make sure req.userId is declared in a custom interface or use "any"
       const user = await User.findById((req as any).userId).select("-password");
       if (!user) {
         res.status(404).json({ message: "User not found" });
@@ -72,7 +71,6 @@ router.get(
   }
 );
 
-
 // Update user info
 router.put(
   "/me",
@@ -80,7 +78,7 @@ router.put(
   async (req: Request, res: Response): Promise<void> => {
     try {
       const { name, email, profileImage } = req.body;
-      
+
       const user = await User.findByIdAndUpdate(
         (req as any).userId,
         { name, email, profileImage },

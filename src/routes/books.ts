@@ -75,9 +75,6 @@ router.get(
     try {
       const { id } = req.params;
 
-      // In a real implementation, you might:
-      // 1. Check your database first if you've stored the book
-      // 2. If not, fetch from Google Books API
       const response = await axios.get(
         `https://www.googleapis.com/books/v1/volumes/${id}`,
         {
@@ -128,7 +125,6 @@ router.get(
   auth,
   async (req: any, res: Response): Promise<void> => {
     try {
-      // Get books where borrower matches the current user's ID
       const books = await Book.find({ borrower: req.userId });
       res.json(books);
     } catch (error) {
@@ -138,12 +134,10 @@ router.get(
   }
 );
 
-// In your server route for getting all books (/books)
 router.get("/", async (req: Request, res: Response): Promise<void> => {
   try {
     const books = await Book.find();
 
-    // Transform the genre fields to use dot notation instead of slash
     const transformedBooks = books.map((book) => ({
       ...book.toObject(),
       genre0: book["genre/0"],
@@ -157,7 +151,7 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
   }
 });
 
-// Similarly update the single book route
+
 router.get("/:id", async (req: Request, res: Response): Promise<void> => {
   try {
     const book = await Book.findById(req.params.id);
@@ -166,7 +160,6 @@ router.get("/:id", async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Transform the genre fields
     const transformedBook = {
       ...book.toObject(),
       genre0: book["genre/0"],

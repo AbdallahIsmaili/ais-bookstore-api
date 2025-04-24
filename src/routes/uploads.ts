@@ -38,7 +38,7 @@ router.post(
     try {
       if (!req.file) {
         res.status(400).json({ message: "No file uploaded" });
-        return; // Explicit return
+        return; 
       }
 
       const fileUrl = `/uploads/${req.file.filename}`;
@@ -47,11 +47,11 @@ router.post(
         url: fileUrl,
         message: "File uploaded successfully",
       });
-      return; // Explicit return
+      return; 
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: "Server error" });
-      return; // Explicit return
+      return; 
     }
   }
 );
