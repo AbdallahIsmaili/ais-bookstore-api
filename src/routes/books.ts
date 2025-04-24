@@ -1,10 +1,15 @@
 import express, { Request, Response } from "express";
-import Book from "../models/Book";
+import Book, { IBook } from "../models/Book";
 import User from "../models/User";
 import auth from "../middleware/auth";
 import axios from "axios";
+import Loan, { ILoan } from "../models/Loan";
+import mongoose from "mongoose";
 
 const router = express.Router();
+
+// Helper type for populated loan
+type PopulatedLoan = Omit<ILoan, "book"> & { book: IBook };
 
 router.get(
   "/google-books/search",
@@ -15,8 +20,6 @@ router.get(
         res.status(400).json({ error: "Search query required" });
         return;
       }
-
-      console.log("Requesting Google Books for query:", q);
 
       const response = await axios.get(
         "https://www.googleapis.com/books/v1/volumes",
@@ -54,12 +57,6 @@ router.get(
 
       res.json(transformedBooks);
     } catch (error: any) {
-      console.error("Google Books API Error:", {
-        message: error.message,
-        response: error.response?.data,
-        stack: error.stack,
-      });
-
       res.status(500).json({
         error: "Failed to fetch books",
         details: error.response?.data?.error?.message || error.message,
@@ -67,7 +64,6 @@ router.get(
     }
   }
 );
-
 
 router.get(
   "/google-books/:id",
@@ -105,12 +101,6 @@ router.get(
 
       res.json(transformedBook);
     } catch (error: any) {
-      console.error("Google Books API Error:", {
-        message: error.message,
-        response: error.response?.data,
-        stack: error.stack,
-      });
-
       res.status(500).json({
         error: "Failed to fetch book details",
         details: error.response?.data?.error?.message || error.message,
@@ -119,16 +109,29 @@ router.get(
   }
 );
 
-
 router.get(
   "/borrowed",
   auth,
   async (req: any, res: Response): Promise<void> => {
     try {
-      const books = await Book.find({ borrower: req.userId });
+      const loans = await Loan.find({ user: req.userId, status: "active" })
+        .populate<{ book: IBook }>("book")
+        .sort({ dueDate: 1 })
+        .lean();
+
+      const books = loans.map((loan) => {
+        const book = loan.book as IBook;
+        return {
+          ...book,
+          _id: book._id?.toString(),
+          borrowedDate: loan.borrowedDate.toISOString(),
+          dueDate: loan.dueDate.toISOString(),
+          loanId: loan._id?.toString(),
+        };
+      });
+
       res.json(books);
     } catch (error) {
-      console.error(error);
       res.status(500).send("Server error");
     }
   }
@@ -136,44 +139,27 @@ router.get(
 
 router.get("/", async (req: Request, res: Response): Promise<void> => {
   try {
-    const books = await Book.find();
-
-    const transformedBooks = books.map((book) => ({
-      ...book.toObject(),
-      genre0: book["genre/0"],
-      genre1: book["genre/1"],
-    }));
-
-    res.json(transformedBooks);
+    const books = await Book.find().lean();
+    res.json(books);
   } catch (error) {
-    console.error(error);
     res.status(500).send("Server error");
   }
 });
 
-
 router.get("/:id", async (req: Request, res: Response): Promise<void> => {
   try {
-    const book = await Book.findById(req.params.id);
+    const book = await Book.findById(req.params.id).lean();
     if (!book) {
       res.status(404).json({ message: "Book not found" });
       return;
     }
 
-    const transformedBook = {
-      ...book.toObject(),
-      genre0: book["genre/0"],
-      genre1: book["genre/1"],
-    };
-
-    res.json(transformedBook);
+    res.json(book);
   } catch (error) {
-    console.error(error);
     res.status(500).send("Server error");
   }
 });
 
-// POST /books
 router.post("/", auth, async (req: Request, res: Response): Promise<void> => {
   try {
     const {
@@ -195,16 +181,13 @@ router.post("/", auth, async (req: Request, res: Response): Promise<void> => {
       "genre/1": genre1,
       cover_image,
     });
-
     const book = await newBook.save();
     res.json(book);
   } catch (error) {
-    console.error(error);
     res.status(500).send("Server error");
   }
 });
 
-// PUT /books/:id
 router.put("/:id", auth, async (req: Request, res: Response): Promise<void> => {
   try {
     const {
@@ -229,7 +212,7 @@ router.put("/:id", auth, async (req: Request, res: Response): Promise<void> => {
         cover_image,
       },
       { new: true }
-    );
+    ).lean();
 
     if (!book) {
       res.status(404).json({ message: "Book not found" });
@@ -238,33 +221,29 @@ router.put("/:id", auth, async (req: Request, res: Response): Promise<void> => {
 
     res.json(book);
   } catch (error) {
-    console.error(error);
     res.status(500).send("Server error");
   }
 });
 
-// Delete book (admin only)
 router.delete(
   "/:id",
   auth,
   async (req: Request, res: Response): Promise<void> => {
     try {
-      const book = await Book.findByIdAndDelete(req.params.id);
-
+      const book = await Book.findByIdAndDelete(req.params.id).lean();
       if (!book) {
         res.status(404).json({ message: "Book not found" });
         return;
       }
-
       res.json({ message: "Book removed" });
     } catch (error) {
-      console.error(error);
       res.status(500).send("Server error");
     }
   }
 );
 
-// Borrow book
+
+// Update the borrow endpoint
 router.post(
   "/:id/borrow",
   auth,
@@ -281,23 +260,45 @@ router.post(
         return;
       }
 
+      const dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + 14);
+
+      const loan = new Loan({
+        book: book._id,
+        user: req.userId,
+        borrowedDate: new Date(),
+        dueDate,
+        status: "active",
+      });
+      await loan.save();
+
       book.isAvailable = false;
-      book.borrower = req.userId;
       await book.save();
 
       await User.findByIdAndUpdate(req.userId, {
         $push: { borrowedBooks: book._id },
       });
 
-      res.json(book);
+      // Cast to IBook to ensure proper typing
+      const bookObj = book.toObject() as IBook;
+      const loanObj = loan.toObject() as ILoan;
+
+      res.json({
+        book: { ...bookObj, _id: bookObj._id.toString() },
+        loan: {
+          ...loanObj,
+          _id: loanObj._id.toString(),
+          book: bookObj._id.toString(),
+          user: req.userId.toString(),
+        },
+      });
     } catch (error) {
-      console.error(error);
       res.status(500).send("Server error");
     }
   }
 );
 
-// Return book
+// Update the return endpoint
 router.post(
   "/:id/return",
   auth,
@@ -314,25 +315,46 @@ router.post(
         return;
       }
 
-      if (book.borrower?.toString() !== req.userId) {
-        res.status(403).json({ message: "Not authorized to return this book" });
+      const loan = await Loan.findOne({
+        book: book._id,
+        user: req.userId,
+        status: "active",
+      });
+      if (!loan) {
+        res.status(404).json({ message: "No active loan found for this book" });
         return;
       }
 
+      loan.returnedDate = new Date();
+      loan.status = "returned";
+      await loan.save();
+
       book.isAvailable = true;
-      book.borrower = undefined;
       await book.save();
 
       await User.findByIdAndUpdate(req.userId, {
         $pull: { borrowedBooks: book._id },
       });
 
-      res.json(book);
+      // Cast to IBook to ensure proper typing
+      const bookObj = book.toObject() as IBook;
+      const loanObj = loan.toObject() as ILoan;
+
+      res.json({
+        book: { ...bookObj, _id: bookObj._id.toString() },
+        loan: {
+          ...loanObj,
+          _id: loanObj._id.toString(),
+          book: bookObj._id.toString(),
+          user: req.userId.toString(),
+        },
+      });
     } catch (error) {
-      console.error(error);
       res.status(500).send("Server error");
     }
   }
 );
+
+
 
 export default router;

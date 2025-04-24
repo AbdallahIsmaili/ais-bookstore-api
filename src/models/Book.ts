@@ -1,16 +1,16 @@
 import mongoose, { Document } from "mongoose";
 
 export interface IBook extends Document {
+  _id: mongoose.Types.ObjectId;
   title: string;
   author: string;
   description: string;
-  publication_year: number; // Changed from publishedYear
+  publication_year: number; 
   "genre/0": string;
   "genre/1": string;
   cover_image: string;
   isAvailable: boolean;
   borrower?: mongoose.Types.ObjectId;
-  // Virtual properties
   genre0: string;
   genre1: string;
 }
@@ -24,7 +24,6 @@ const bookSchema = new mongoose.Schema<IBook>({
   "genre/1": { type: String },
   cover_image: { type: String },
   isAvailable: { type: Boolean, default: true },
-  borrower: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
 });
 
 // Add virtual properties for easier access to genre fields
