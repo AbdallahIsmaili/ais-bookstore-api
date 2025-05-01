@@ -8,7 +8,6 @@ import mongoose from "mongoose";
 
 const router = express.Router();
 
-// Helper type for populated loan
 type PopulatedLoan = Omit<ILoan, "book"> & { book: IBook };
 
 router.get(
@@ -146,7 +145,8 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
   }
 });
 
-router.get("/:id", auth, async (req: any, res: Response): Promise<void> => {
+
+router.get("/:id", async (req: Request, res: Response): Promise<void> => {
   try {
     const book = await Book.findById(req.params.id).lean();
     if (!book) {
@@ -154,32 +154,34 @@ router.get("/:id", auth, async (req: any, res: Response): Promise<void> => {
       return;
     }
 
-    if (!book.isAvailable) {
-      const loan = await Loan.findOne({
-        book: book._id,
-        status: "active",
-      }).lean();
+    if (req.headers.authorization && !book.isAvailable) {
+      try {
+        const loan = await Loan.findOne({
+          book: book._id,
+          status: "active",
+        }).lean();
 
-      if (loan) {
-        res.json({
-          ...book,
-          borrowedDate: loan.borrowedDate.toISOString(),
-          dueDate: loan.dueDate.toISOString(),
-          borrower: loan.user.toString(),
-          loanId: loan._id.toString(),
-        });
-        return; // 🔐 prevent sending another response later
+        if (loan) {
+          res.json({
+            ...book,
+            borrowedDate: loan.borrowedDate?.toISOString(),
+            dueDate: loan.dueDate?.toISOString(),
+            borrower: loan.user?.toString(),
+            loanId: loan._id?.toString(),
+          });
+          return;
+        }
+      } catch (error) {
+        console.error("Loan lookup error:", error);
       }
     }
 
-    res.json(book); // sent only if loan isn't found or book is available
+    res.json(book);
   } catch (error) {
     console.error(error);
     res.status(500).send("Server error");
   }
 });
-
-
 
 router.post("/", auth, async (req: Request, res: Response): Promise<void> => {
   try {
@@ -264,7 +266,6 @@ router.delete(
 );
 
 
-// Update the borrow endpoint
 router.post(
   "/:id/borrow",
   auth,
@@ -300,7 +301,6 @@ router.post(
         $push: { borrowedBooks: book._id },
       });
 
-      // Cast to IBook to ensure proper typing
       const bookObj = book.toObject() as IBook;
       const loanObj = loan.toObject() as ILoan;
 
@@ -319,7 +319,7 @@ router.post(
   }
 );
 
-// Update the return endpoint
+
 router.post(
   "/:id/return",
   auth,
@@ -357,7 +357,6 @@ router.post(
         $pull: { borrowedBooks: book._id },
       });
 
-      // Cast to IBook to ensure proper typing
       const bookObj = book.toObject() as IBook;
       const loanObj = loan.toObject() as ILoan;
 

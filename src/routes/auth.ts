@@ -52,7 +52,7 @@ router.post("/login", async (req: Request, res: Response): Promise<void> => {
   }
 });
 
-// Get current user info
+// Get user info
 router.get(
   "/me",
   authMiddleware,

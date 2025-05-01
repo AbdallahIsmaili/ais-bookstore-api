@@ -26,7 +26,6 @@ const bookSchema = new mongoose.Schema<IBook>({
   isAvailable: { type: Boolean, default: true },
 });
 
-// Add virtual properties for easier access to genre fields
 bookSchema.virtual("genre0").get(function () {
   return this["genre/0"];
 });
@@ -35,7 +34,6 @@ bookSchema.virtual("genre1").get(function () {
   return this["genre/1"];
 });
 
-// Ensure virtuals are included when converting to JSON or to Object
 bookSchema.set("toJSON", { virtuals: true });
 bookSchema.set("toObject", { virtuals: true });
 

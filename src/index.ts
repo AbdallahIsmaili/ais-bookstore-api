@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 import connectDB from "./config/db";
 import authRoutes from "./routes/auth";
 import bookRoutes from "./routes/books";
-import uploadRoutes from "./routes/uploads"; // ✅ ADD THIS
+import uploadRoutes from "./routes/uploads"; 
 import path from "path";
 
 dotenv.config();
@@ -21,7 +21,7 @@ app.get("/", (req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/books", bookRoutes);
-app.use("/api/upload", uploadRoutes); // ✅ ADD THIS
+app.use("/api/upload", uploadRoutes); 
 app.use("/api/uploads", express.static(path.join(__dirname, "../uploads"))); // ✅ Serve files
 
 connectDB().then(() => {
